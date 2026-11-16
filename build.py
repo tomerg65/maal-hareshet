@@ -30,9 +30,9 @@ FOREIGN = re.compile(r"וייטנאם|Vietnam|\.vn")
 VB_ONLY = ["כדורעף", "מטה אשר", "עיילבון", "המעפיל", "חוסאם נצרת", "ליגת אתנה", "בנות נצרת", "SVA"]
 
 
-def get(url):
+def get(url, timeout=15):
     req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept-Language": "he"})
-    with urllib.request.urlopen(req, timeout=15) as res:
+    with urllib.request.urlopen(req, timeout=timeout) as res:
         return res.read().decode("utf-8", "replace")
 
 
@@ -335,10 +335,10 @@ def main():
         oldlg = old.get("leagues", {}).get(key) or {}
         try:
             try:
-                page = get(lg["url"])
+                page = get(lg["url"], 40)  # the league page is heavy and can take a while
             except Exception:
                 time.sleep(6)  # one slow answer is common; try once more
-                page = get(lg["url"])
+                page = get(lg["url"], 40)
             standings, games = parse_league(page)
             if len(standings) < 6 or len(games) < 20:
                 raise ValueError(f"parsed too little ({len(standings)} teams, {len(games)} games)")
