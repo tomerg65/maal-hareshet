@@ -280,6 +280,10 @@ SITE_HEAD = ('<!doctype html><html lang="he" dir="rtl"><head><meta charset="utf-
              '<meta property="og:description" content="ליגת העל בכדורעף: תוצאות, טבלה, משחקים, קבוצות וחדשות.">'
              '<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E'
              '%3Ccircle cx=%2716%27 cy=%2716%27 r=%2715%27 fill=%27%23f4b400%27 stroke=%27%230a2d75%27 stroke-width=%272%27/%3E%3C/svg%3E">'
+             '<link rel="manifest" href="manifest.webmanifest"><link rel="apple-touch-icon" href="icon-192.png">'
+             '<meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes">'
+             '<meta name="apple-mobile-web-app-title" content="מעל הרשת">'
+             '<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">'
              '<style>:root{color-scheme:light}body{margin:0;font:14px system-ui}img{max-width:100%}'
              '[hidden]{display:none!important}</style>')
 CI = bool(os.environ.get("GITHUB_ACTIONS"))
@@ -301,6 +305,8 @@ def render(payload):
     (site / "index.html").write_text(SITE_HEAD + head + "</head><body>" + body + "</body></html>", encoding="utf-8")
     (site / "data.json").write_text(payload, encoding="utf-8")
     (site / ".nojekyll").write_text("", encoding="utf-8")
+    for f in (HERE / "assets").glob("*"):  # icons, manifest and service worker for "install as app"
+        (site / f.name).write_bytes(f.read_bytes())
 
 
 def load_cache():

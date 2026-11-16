@@ -211,6 +211,7 @@ a.tile:hover, a.card:hover { border-color: var(--band-soft); transform: translat
 .article .body h2 { font-family: var(--display); font-size: 19px; margin-top: 6px; }
 .article ul { margin: 0; padding-inline-start: 20px; display: grid; gap: 6px; }
 
+.install { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; display: flex; gap: 10px 16px; align-items: center; justify-content: space-between; flex-wrap: wrap; margin-bottom: 18px; }
 footer { color: var(--muted); font-size: 12.5px; padding-block: 0 30px; display: grid; gap: 4px; text-align: center; }
 footer strong { color: var(--ink); font-size: 14px; }
 </style>
@@ -238,6 +239,10 @@ footer strong { color: var(--ink); font-size: 14px; }
     </div></nav>
   </header>
   <main class="wrap" id="view"></main>
+  <div class="wrap" id="install" hidden><div class="install">
+    <span><strong>רוצים את מעל הרשת במסך הבית?</strong> <span id="install-how">מתקינים בלחיצה, ונפתח כמו אפליקציה.</span></span>
+    <span class="bar"><button class="btn hot" type="button" id="install-go">התקנה</button><button class="btn" type="button" id="install-no">לא עכשיו</button></span>
+  </div></div>
   <footer class="wrap" id="foot"></footer>
 </div>
 
@@ -577,6 +582,32 @@ async function poll() {
     DATA = d;
     if (changed) { buildArticles(); const y = scrollY; render(); scrollTo(0, y); } else footer();
   } catch (e) {}
+}
+/* Install as an app (public site only). Android and desktop get a real install button;
+   on iPhone the browser has no install call, so the bar explains the two taps. */
+if (LIVE) {
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+  const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone;
+  const dismissed = store.get('vb-install-no', '') === '1';
+  let promptEvent = null;
+  addEventListener('beforeinstallprompt', e => {
+    e.preventDefault(); promptEvent = e;
+    if (!dismissed && !standalone) $('install').hidden = false;
+  });
+  const ios = /iphone|ipad|ipod/i.test(navigator.userAgent) && !standalone;
+  if (ios && !dismissed) {
+    $('install-how').textContent = 'באייפון: לוחצים על כפתור השיתוף בספארי, ואז "הוסף למסך הבית".';
+    $('install-go').hidden = true;
+    $('install').hidden = false;
+  }
+  $('install-go').addEventListener('click', async () => {
+    if (!promptEvent) return;
+    promptEvent.prompt();
+    try { await promptEvent.userChoice; } catch (e) {}
+    promptEvent = null; $('install').hidden = true;
+  });
+  $('install-no').addEventListener('click', () => { store.set('vb-install-no', '1'); $('install').hidden = true; });
+  addEventListener('appinstalled', () => { $('install').hidden = true; });
 }
 if (LIVE) {
   setInterval(() => { if (!document.hidden) poll(); }, 60000);
