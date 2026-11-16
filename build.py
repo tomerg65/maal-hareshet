@@ -284,7 +284,7 @@ SITE_HEAD = ('<!doctype html><html lang="he" dir="rtl"><head><meta charset="utf-
              '[hidden]{display:none!important}</style>')
 CI = bool(os.environ.get("GITHUB_ACTIONS"))
 CACHE = HERE / "cache" / "data.json" if CI else HERE / "data.json"
-MAX_PAGES = 14          # game pages fetched per run, to stay gentle with the federation site
+MAX_PAGES = 6           # game pages fetched per run, to stay gentle with the federation site
 NEWS_EVERY_MIN = 45
 
 
@@ -324,6 +324,7 @@ def main():
     today = datetime.now().strftime("%Y-%m-%d")
     soon = (datetime.now() + timedelta(days=21)).strftime("%Y-%m-%d")
     budget, fresh, people = MAX_PAGES, 0, set()
+    # Step 1: both league pages first, so a slow site never costs us the table and the results.
     for key, lg in LEAGUES.items():
         oldlg = old.get("leagues", {}).get(key) or {}
         try:
@@ -335,10 +336,10 @@ def main():
             if not oldlg:
                 sys.exit("no saved data to fall back on")
             data["leagues"][key] = oldlg
+            time.sleep(3)
             continue
         fresh += 1
         prev = {g["id"]: g for g in oldlg.get("games", []) if g.get("id")}
-        squads = dict(oldlg.get("squads", {}))
         for g in games:
             p = prev.get(g["id"]) or {}
             for f in ("live", "lc", "nf"):
@@ -346,28 +347,35 @@ def main():
                     g[f] = p[f]
             if "sets" in p and p.get("hs") == g.get("hs") and p.get("gs") == g.get("gs"):
                 g["sets"] = p["sets"]
-        games_by_time = sorted(games, key=lambda g: g["at"])
-        todo = [g for g in games_by_time if g["id"] and "hs" in g and "sets" not in g and not g.get("nf")]
-        todo += [g for g in games_by_time if g["id"] and "hs" not in g and "live" not in g
-                 and today <= g["at"][:10] <= soon and g.get("lc") != today]
-        names = {r["team"] for r in standings}
-        for g in todo:
-            if budget <= 0:
-                break
-            budget -= 1
-            time.sleep(0.5)
-            sq = fetch_game(g)
-            if sq is None:  # page did not load; try again on a later run
-                continue
-            if "hs" in g:
-                g["nf"] = 1
-                for team, v in sq.items():
-                    if team in names:
-                        squads.setdefault(team, {}).update(v)
-            else:
-                g["lc"] = today
         data["leagues"][key] = {"name": lg["name"], "url": lg["url"], "standings": standings,
-                                "games": games, "squads": squads}
+                                "games": games, "squads": dict(oldlg.get("squads", {}))}
+        time.sleep(2)
+    # Step 2: a few game pages per run (new results first, then live links), slowly.
+    todo = []
+    for key, lg in data["leagues"].items():
+        by_time = sorted(lg["games"], key=lambda g: g["at"])
+        todo += [(0, g["at"], key, g) for g in by_time if g.get("id") and "hs" in g and "sets" not in g and not g.get("nf")]
+        todo += [(1, g["at"], key, g) for g in by_time if g.get("id") and "hs" not in g and "live" not in g
+                 and today <= g["at"][:10] <= soon and g.get("lc") != today]
+    misses = 0
+    for _, _, key, g in sorted(todo, key=lambda t: t[:2]):
+        if budget <= 0 or misses >= 2 or not fresh:
+            break
+        budget -= 1
+        time.sleep(2)
+        sq = fetch_game(g)
+        if sq is None:  # page did not load; try again on a later run
+            misses += 1
+            continue
+        if "hs" in g:
+            g["nf"] = 1
+            lg = data["leagues"][key]
+            names = {r["team"] for r in lg["standings"]}
+            for team, v in sq.items():
+                if team in names:
+                    lg["squads"].setdefault(team, {}).update(v)
+        else:
+            g["lc"] = today
     for lg in data["leagues"].values():
         for v in lg.get("squads", {}).values():
             for p in v.get("players", []) + v.get("staff", []):
