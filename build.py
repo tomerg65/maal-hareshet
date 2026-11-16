@@ -328,7 +328,12 @@ def main():
     for key, lg in LEAGUES.items():
         oldlg = old.get("leagues", {}).get(key) or {}
         try:
-            standings, games = parse_league(get(lg["url"]))
+            try:
+                page = get(lg["url"])
+            except Exception:
+                time.sleep(6)  # one slow answer is common; try once more
+                page = get(lg["url"])
+            standings, games = parse_league(page)
             if len(standings) < 6 or len(games) < 20:
                 raise ValueError(f"parsed too little ({len(standings)} teams, {len(games)} games)")
         except Exception as e:
